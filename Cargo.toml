@@ -1,7 +1,8 @@
 [package]
-name = "rust-template"
+name = "{{project-name}}"
 version = "0.1.0"
 edition = "2021"
+authors = ["{{authors}}"]
 
 [dependencies]
 ctrlc = { version = "3.4.5", features = ["termination"] }
