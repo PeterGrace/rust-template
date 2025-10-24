@@ -13,3 +13,5 @@ tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros", "time"] }
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
+console-subscriber = "0.4.1"
+dotenv = "0.15.0"
