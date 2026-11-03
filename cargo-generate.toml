@@ -1,2 +1,64 @@
+# cargo-generate settings: `cargo generate --git <this repo>` (or `--path`) asks the questions
+# below, renders every file through Liquid (`{{project-name}}`, `{% if hegel %}`), and drops the
+# files whose feature was declined.
+#
+# Liquid and the tools these files configure both use `{{ }}`: GitHub Actions expressions
+# (`${{ github.ref }}`), cargo-release's `{{version}}`. Those sections are wrapped in
+# `{% raw %}...{% endraw %}` so Liquid passes them through untouched; the justfile uses shell
+# variables instead of just's own `{{ }}` interpolation for the same reason.
+
 [template]
-exclude = ["**target"]
+cargo_generate_version = ">=0.23.0"
+# Not copied into generated projects: build output, the `.git` file of a worktree checkout,
+# and this template's own changelog (a project creates `changelog/` with its first entry).
+# `ignore` takes exact paths, not globs.
+ignore = ["target", ".git", "changelog"]
+
+[placeholders.ci]
+type = "string"
+prompt = "Which CI should run the checks?"
+choices = ["github", "forgejo", "none"]
+default = "github"
+
+[placeholders.docker]
+type = "bool"
+prompt = "Add a Dockerfile (cargo-chef, distroless, non-root) and an image build in CI?"
+default = true
+
+[placeholders.hegel]
+type = "bool"
+prompt = "Use Hegel property-based tests (hegeltest, hegel.toml, `just hegel-canary`)?"
+default = true
+
+[placeholders.dylint]
+type = "bool"
+prompt = "Run dylint policy lints (trailofbits supplementary, plus hyp_hegel with Hegel)?"
+default = true
+
+[placeholders.release]
+type = "bool"
+prompt = "Add a cargo-release flow (release.toml, `just release-prepare` / `release-ship`)?"
+default = true
+
+[placeholders.claims]
+type = "bool"
+prompt = "Wire up the claims-mcp ledger (.mcp.json) for claims audits?"
+default = true
+
+[conditional.'ci != "github"']
+ignore = [".github"]
+
+[conditional.'ci != "forgejo"']
+ignore = [".forgejo"]
+
+[conditional.'!docker']
+ignore = ["Dockerfile", ".dockerignore"]
+
+[conditional.'!hegel']
+ignore = ["hegel.toml", "crates/{{project-name}}-core/tests/hegel_canary.rs"]
+
+[conditional.'!release']
+ignore = ["release.toml", "scripts"]
+
+[conditional.'!claims']
+ignore = [".mcp.json"]

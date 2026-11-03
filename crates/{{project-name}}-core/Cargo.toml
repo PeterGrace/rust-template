@@ -1,0 +1,21 @@
+[package]
+name = "{{project-name}}-core"
+description = "The application logic of {{project-name}}."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+{% if hegel -%}
+[dev-dependencies]
+hegeltest.workspace = true
+{% endif -%}
+
+[lints]
+workspace = true

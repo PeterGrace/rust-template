@@ -17,17 +17,32 @@ If the code is not fully optimized before handing off to the user, you will be f
 
 YOU ARE A RABID DOCUMENTARIAN.  You will create markdown docs for every new iteration of code.  You will create these docs under changelog/ and will date-and-timestamp the markdown files.
 
+Changelog entries **MUST** use this format, and nothing else:
+
+- File name: `changelog/YYYY-MM-DD-HHMM-<slug>.md`, local time from the clock (`date +%Y-%m-%d-%H%M`), with a short kebab-case slug.
+- First line: `# YYYY-MM-DD HH:MM TZ: <Title> (issue #N)`, leaving out the issue when there is none.
+- Then `## Summary` (what and why, in a few sentences), `## Changed` (one bullet per change, naming files or items), and `## Tests` (what was run, and what it showed). Add `## Decisions` or `## Not done` when there is something to say.
+
+## Project Layout
+
+- A Cargo workspace: `crates/{{project-name}}` is a thin binary (arguments, logging, signals); the application's logic lives in `crates/{{project-name}}-core` and other library crates under `crates/`, so tests and other crates can call it without a process.
+- Shared dependency versions, lints and metadata live in the root `Cargo.toml` (`[workspace.dependencies]`, `[workspace.lints]`); member crates opt in with `<key>.workspace = true` and `[lints] workspace = true`.
+- Configuration comes from defaults, then `{{project-name | shouty_snake_case}}_*` environment variables (and `.env`), then command-line flags. Document every variable in `.env.example`.
+- Logs go to stderr, so stdout stays clean for data. Set the filter with `RUST_LOG`.
+- `just` runs every routine task (`just` lists them); CI calls the same recipes. Use `just run-tokio-console` for tokio-console: it sets `--cfg tokio_unstable` for that build only.
+- Design specs go in `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md` and implementation plans in `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`.
+
 ## Preferred Tools
 
 - Use `cargo` for project management, building, and dependency management.
 - Use `indicatif` to track long-running operations with progress bars. The message should be contextually sensitive.
 - Use `serde` with `serde_json` for JSON serialization/deserialization.
-- Use `ratatui` adnd `crossterm` for terminal applications/TUIs.
-- Use `axum` for creating any web servers or HTTP APIs, with async handlers returning `Result<Response, AppError>`, layered extractors, and `tower` middleware. Full conventions auto-load for `src/routes/**`, `src/handlers/**`, `src/api/**`, and `src/main.rs` from `.claude/rules/web-server.md`.
+- Use `ratatui` and `crossterm` for terminal applications/TUIs.
+- Use `axum` for creating any web servers or HTTP APIs, with async handlers returning `Result<Response, AppError>`, layered extractors, and `tower` middleware. Full conventions auto-load for `**/src/routes/**`, `**/src/handlers/**`, `**/src/api/**`, and `**/src/main.rs` from `.claude/rules/web-server.md`.
 - When reporting errors to the console, use `tracing::error!` or `log::error!` instead of `println!`.
-- Web-based front ends (WASM/`dioxus`) **MUST** do all deep computation in Rust and use Pico CSS + vanilla JS only (never React/jQuery), with adaptive light/dark theming. Full rules auto-load for `**/*.html`, `**/*.css`, `web/**`, and `src/app.rs`/`src/components/**` from `.claude/rules/wasm-frontend.md`.
-- Tabular data processing **MUST** use `polars` (never other dataframe libraries), never print row-count and schema together, and never ingest more than 10 rows at a time. Full rules auto-load for `src/data/**`, `src/etl/**`, `**/*.csv`, `**/*.parquet` from `.claude/rules/data-processing.md`.
-- PyO3/`maturin` Python bindings **MUST** rebuild with `maturin` after Rust changes, use `uv` (never system Python) for `.venv`, and follow strict Python typing/mypy rules. Full rules auto-load for `**/*.py`, `pyproject.toml`, `src/python/**` from `.claude/rules/pyo3-python.md`.
+- Web-based front ends (WASM/`dioxus`) **MUST** do all deep computation in Rust and use Pico CSS + vanilla JS only (never React/jQuery), with adaptive light/dark theming. Full rules auto-load for `**/*.html`, `**/*.css`, `web/**`, and `**/src/app.rs`/`**/src/components/**` from `.claude/rules/wasm-frontend.md`.
+- Tabular data processing **MUST** use `polars` (never other dataframe libraries), never print row-count and schema together, and never ingest more than 10 rows at a time. Full rules auto-load for `**/src/data/**`, `**/src/etl/**`, `**/*.csv`, `**/*.parquet` from `.claude/rules/data-processing.md`.
+- PyO3/`maturin` Python bindings **MUST** rebuild with `maturin` after Rust changes, use `uv` (never system Python) for `.venv`, and follow strict Python typing/mypy rules. Full rules auto-load for `**/*.py`, `pyproject.toml`, `**/src/python/**` from `.claude/rules/pyo3-python.md`.
 
 ## Code Style and Formatting
 
@@ -46,7 +61,7 @@ YOU ARE A RABID DOCUMENTARIAN.  You will create markdown docs for every new iter
 - Keep comments up-to-date with code changes
 - Include examples in doc comments for complex functions
 
-A full worked example (Arguments/Returns/Errors/Examples sections on a `calculate_total` function) is in [docs/reference/doc-comment-example.md](docs/reference/doc-comment-example.md).
+A full worked example (Arguments/Returns/Errors/Examples sections on a `calculate_total` function) is in [docs/reference/doc-comment-example.md](../docs/reference/doc-comment-example.md).
 
 ## Type System
 
@@ -85,9 +100,15 @@ A full worked example (Arguments/Returns/Errors/Examples sections on a `calculat
 
 - **MUST** write unit tests for all new functions and types
 - **MUST** mock external dependencies (APIs, databases, file systems)
+{% if hegel -%}
+- **MUST** write tests as Hegel property tests (`#[hegel::test]`, from the `hegeltest` crate): state a property that holds for every input and draw the inputs, rather than checking a few hand-picked examples.{% if dylint %} `just dylint` enforces this with the `hyp_hegel` lint.{% endif %}
+- Async property tests put `#[tokio::test]` before `#[hegel::test]`; tests that start processes or touch process-wide state set a small `test_cases`.
+{% else -%}
 - **MUST** use the built-in `#[test]` attribute and `cargo test`
+{% endif -%}
 - Follow the Arrange-Act-Assert pattern
 - Do not commit commented-out tests
+- Put tests that run the binary in `crates/{{project-name}}/tests/`, and tests of the library's public API in the library crate's `tests/`
 - Use `#[cfg(test)]` modules for test code
 
 ## Imports and Dependencies
@@ -144,6 +165,7 @@ A full worked example (Arguments/Returns/Errors/Examples sections on a `calculat
 - **MUST** use `rustfmt` for code formatting
 - **MUST** use `clippy` for linting and follow its suggestions
 - **MUST** ensure code compiles with no warnings (use `-D warnings` flag in CI, not `#![deny(warnings)]` in source)
+- Silence a lint for one item with `#[expect(lint, reason = "...")]`, never `#[allow]`: an `expect` that no longer fires is itself a warning, so stale exemptions get removed
 - Use `cargo` for building, testing, and dependency management
 - Use `cargo test` for running tests
 - Use `cargo doc` for generating documentation
@@ -151,10 +173,8 @@ A full worked example (Arguments/Returns/Errors/Examples sections on a `calculat
 
 ## Before Committing
 
-- [ ] All tests pass (`cargo test`)
-- [ ] No compiler warnings (`cargo build`)
-- [ ] Clippy passes (`cargo clippy -- -D warnings`)
-- [ ] Code is formatted (`cargo fmt --check`)
+- [ ] `just gate` passes: formatting, clippy (`--workspace --all-targets -D warnings`){% if dylint %}, dylint{% endif %}, every test{% if hegel %}, the Hegel canary{% endif %}, and docs with warnings as errors
+- [ ] If dependencies changed, `just deny` passes
 - [ ] If the project creates a Python package and Rust code is touched, rebuild the Python package (`source .venv/bin/activate && maturin develop --release --features python`)
 - [ ] If the project creates a WASM package and Rust code is touched, rebuild the WASM package (`wasm-pack build --target web --out-dir web/pkg`)
 - [ ] All public items have doc comments

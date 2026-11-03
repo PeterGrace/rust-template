@@ -5,8 +5,8 @@ paths:
   - "**/*.css"
   - "**/*.scss"
   - "web/**"
-  - "src/app.rs"
-  - "src/components/**"
+  - "**/src/app.rs"
+  - "**/src/components/**"
 ---
 
 # WASM / Dioxus Front End

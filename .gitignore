@@ -1,1 +1,13 @@
 /target
+# Local secrets and settings; .env.example documents the variables.
+.env
+# Git worktrees for parallel agent sessions.
+.worktrees/
+{%- if hegel %}
+# Hegel's failure database and run state.
+.hegel/
+{%- endif %}
+{%- if claims %}
+# claims-mcp's lock while it writes claims.json.
+/.claims.json.lock
+{%- endif %}

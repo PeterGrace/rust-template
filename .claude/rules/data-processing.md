@@ -1,8 +1,8 @@
 ---
 description: "Tabular data processing conventions (polars)"
 paths:
-  - "src/data/**"
-  - "src/etl/**"
+  - "**/src/data/**"
+  - "**/src/etl/**"
   - "**/*.csv"
   - "**/*.parquet"
 ---

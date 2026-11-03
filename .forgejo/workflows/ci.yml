@@ -1,0 +1,123 @@
+# Enforces the pre-commit checklist from .claude/CLAUDE.md on every pull request and push to
+# main. Every step calls a justfile recipe, so `just <recipe>` reproduces it locally.
+#
+# Runs in the shared `ci-runner` job image (Rust stable at its build time, plus `just`).
+# rust-toolchain.toml still decides the toolchain: when it pins a different version, rustup
+# downloads it on each run until the image is rebuilt.
+#
+# Repository variables: CI_RUNNER_TAG pins the job image tag (default `latest`).
+{%- if docker %}
+# REGISTRY and HARBOR_PROJECT name where the image is pushed; the HARBOR_USERNAME and
+# HARBOR_PASSWORD secrets log in to it.
+{%- endif %}
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+{% raw %}
+# A new push to a pull request cancels its in-flight run. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  check:
+    name: lint, deny, test
+    runs-on: ubuntu-latest
+    container:
+      image: r.gfpd.us/gfd/ci-runner:${{ vars.CI_RUNNER_TAG || 'latest' }}
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+
+      # Each tool is installed only if the job image lacks it.
+      - name: Install tools
+        run: |
+          command -v just >/dev/null 2>&1 || cargo install --locked just
+          command -v cargo-deny >/dev/null 2>&1 || cargo install --locked cargo-deny@0.20.2
+{% endraw %}{%- if dylint %}
+          # Must match the trailofbits tag in Cargo.toml's `[workspace.metadata.dylint]`.
+          command -v cargo-dylint >/dev/null 2>&1 \
+            || cargo install --locked cargo-dylint@6.0.4 dylint-link@6.0.4
+{%- endif %}{% raw %}
+
+      - name: Cache the cargo registry
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+{% endraw %}{% if dylint %}{% raw %}
+      # The dylint driver and lint libraries build on nightly, which takes minutes. Keyed on
+      # Cargo.toml, whose library tags select what gets built.
+      - name: Cache the dylint drivers and lint libraries
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: |
+            ~/.dylint_drivers
+            target/dylint
+          key: dylint-${{ runner.os }}-${{ hashFiles('Cargo.toml') }}
+          restore-keys: dylint-${{ runner.os }}-
+{% endraw %}{% endif %}
+      # Fails if Cargo.lock is out of date, so no later step can change it.
+      - run: cargo fetch --locked
+      # fmt-check, clippy{% if dylint %}, dylint{% endif %}: cheapest first.
+      - run: just lint
+      - run: just clippy-tokio-console
+      - run: just doc
+      - run: just deny
+      - run: just test
+{%- if hegel %}
+      # On success a property test prints the same `ok` whether it explored a hundred inputs or
+      # none; this counts the canary's cases and fails if they collapse.
+      - run: just hegel-canary
+{%- endif %}
+{% if docker %}{% raw %}
+  # Builds the image on every run; pushes it, tagged with the version, only for a `v*` tag.
+  image:
+    name: image
+    needs: [check]
+    runs-on: ubuntu-latest
+    container:
+      image: r.gfpd.us/gfd/ci-runner:${{ vars.CI_RUNNER_TAG || 'latest' }}
+      env:
+        DOCKER_HOST: tcp://dind.internal:2375
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      - id: meta
+        uses: https://github.com/docker/metadata-action@v5
+        with:
+          images: ${{ vars.REGISTRY }}/${{ vars.HARBOR_PROJECT }}/${{ github.event.repository.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,format=long
+      - uses: https://github.com/docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: https://github.com/docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - uses: https://github.com/docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          # Builds that don't push keep only the cache, not an image.
+          outputs: ${{ !startsWith(github.ref, 'refs/tags/v') && 'type=cacheonly' || '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+{% endraw %}{% endif -%}
