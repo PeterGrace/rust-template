@@ -1,10 +1,10 @@
 ---
 description: "Axum web-server and HTTP API conventions"
 paths:
-  - "src/routes/**"
-  - "src/handlers/**"
-  - "src/api/**"
-  - "src/main.rs"
+  - "**/src/routes/**"
+  - "**/src/handlers/**"
+  - "**/src/api/**"
+  - "**/src/main.rs"
 ---
 
 # Web Server (Axum)

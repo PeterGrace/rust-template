@@ -1,0 +1,7 @@
+# The image builds from these files alone. Everything else, `target/` above all, stays out of
+# the build context, so the context is small and an edit to docs never invalidates the cache.
+*
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!crates/

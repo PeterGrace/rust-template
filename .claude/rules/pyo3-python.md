@@ -3,7 +3,7 @@ description: "PyO3/maturin Python bindings and embedded Python style rules"
 paths:
   - "**/*.py"
   - "pyproject.toml"
-  - "src/python/**"
+  - "**/src/python/**"
 ---
 
 # PyO3 / Maturin Python Bindings
